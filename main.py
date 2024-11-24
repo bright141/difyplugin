@@ -1,9 +1,11 @@
+import json
+import aiohttp
 from pkg.plugin.context import register, handler, llm_func, BasePlugin, APIHost, EventContext
 from pkg.plugin.events import *  # 导入事件类
 
 
 # 注册插件
-@register(name="Hello", description="hello world", version="0.1", author="RockChinQ")
+@register(name="difyplugin", description="dev", version="0.1", author="bright")
 class MyPlugin(BasePlugin):
 
     # 插件加载时触发
@@ -43,7 +45,46 @@ class MyPlugin(BasePlugin):
 
             # 阻止该事件默认行为（向接口获取回复）
             ctx.prevent_default()
+        else:
+            # 拦截 LangBot 的请求回复
+            await self.intercept_and_request(ctx)
 
+    
+
+    async def intercept_and_request(self, ctx: EventContext):
+        # 阻止该事件默认行为（向接口获取回复）
+        ctx.prevent_default()
+
+        # 自定义请求逻辑
+        api_url = "http://game.mcrjba.cn:8089/v1/chat-messages"
+        api_key = "app-9A5MnFV2ZbYUtpF3UodCGUfv"
+        message = ctx.event.text_message
+        user_name = "dify-plugin"
+
+        headers = {
+            "Authorization": f"Bearer {api_key}",
+            "Content-Type": "application/json"
+        }
+
+        data = {
+            "inputs": {},
+            "query": message,
+            "response_mode": "blocking",
+            "conversation_id": "",
+            "user": user_name
+        }
+
+        async with aiohttp.ClientSession() as session:
+            async with session.post(api_url, json=data, headers=headers) as response:
+                if response.status == 200:
+                    chat_response = await response.json()
+                    reply_message = json.dumps(chat_response, indent=4, ensure_ascii=False)
+                    ctx.add_return("reply", [reply_message])
+                else:
+                    self.ap.logger.error(f"请求失败，状态码：{response.status}")
+                    ctx.add_return("reply", ["请求失败，请稍后再试"])
+
+                    
     # 插件卸载时触发
     def __del__(self):
         pass
